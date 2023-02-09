@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Omegle Identity Fetcher
+// @name         YOmegle
 // @namespace    http://tampermonkey.net/
 // @version      0.1
-// @description  Fetch identity hash of strangers on omegle.
+// @description  A tampermonkey userscript used to modify and add more features to omegle.
 // @author       Yana
 // @match        https://www.omegle.com/
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=omegle.com
