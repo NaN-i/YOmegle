@@ -156,6 +156,7 @@
     }
 
     (function(handler) {
+        window.unsafeWindow.termsLevel = 1;
         handleRequestOpen(handler);
     })(XMLHttpRequest.prototype.open);
 })();
