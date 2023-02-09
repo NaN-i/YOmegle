@@ -6,16 +6,45 @@
 // @author       Yana
 // @match        https://www.omegle.com/
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=omegle.com
+// @require      https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.3/jquery.min.js
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        GM_listValues
+// @grant        GM_addStyle
+// @grant        GM_deleteValue
 // ==/UserScript==
 
 (function() {
     'use strict';
+    GM_addStyle(" \
+        #savePopupContainer { \
+            display: inline-block; \
+            position: relative; \
+            margin: 5px; \
+            box-shadow: rgb(6 24 44 / 40%) 0px 0px 0px 2px, rgb(6 24 44 / 65%) 0px 4px 6px -1px, rgb(255 255 255 / 8%) 0px 1px 0px inset; \
+        } \
+        #savePopupContainer input { \
+            margin-left: 2em; \
+            margin-top: 2em; \
+            margin-bottom: 2em; \
+        } \
+        #savePopupContainer button { \
+            margin-right: 2em; \
+            margin-top: 2em; \
+            margin-bottom: 2em; \
+        } \
+        #savePopupContainer p { \
+            margin: 1px; \
+            font-size: 12px; \
+        } \
+    ");
 
     let myIdent = GM_getValue("myIdent");
+    let strangerIdent;
     let firstIdents = [];
     const eventsURLRe = /https?:\/\/front\d+\.omegle\.com\/(?:start|events)/;
+    
+    function wait(interval) { return new Promise(resolve => setTimeout(resolve, interval)); }
 
     function generateRandID() {
         let b = '';
@@ -30,18 +59,73 @@
         // window.randID = generateRandID();
     }
 
-    function printOmegleLog(log) {
-        const child = document.querySelector("div.logbox").firstChild;
+    async function printOmegleLog(log, isIdent = false) {
+        const child = document.querySelector("div.logbox").lastChild;
         const div = document.createElement("div");
         const p = document.createElement("p");
         const text = document.createTextNode(log);
+        const saveSpan = document.createElement("span");
 
         div.className = "logitem";
         p.className = "statuslog";
+        p.style.display = "inline";
+        saveSpan.id = "saveSpan";
 
         p.appendChild(text);
         div.appendChild(p);
+        div.appendChild(saveSpan);
         child.appendChild(div);
+
+        if (isIdent) {
+            const container = $(" \
+                <div id=\"savePopupContainer\"> \
+                    <input type=\"text\" id=\"name\" maxlength=\"20\" placeholder=\"alias\"></input> \
+                    <button id=\"saveBtn\">Set</button> \
+                    <p>I will remember the alias for this stranger.</p> \
+                </div> \
+            ").hide();
+
+            $(child).append(container);
+
+            const saveSpanJNode = $("#saveSpan");
+
+            saveSpanJNode.append(" \
+                <button id=\"promptSaveBtn\">S</button> \
+            ");
+
+            saveSpanJNode.append(" \
+                <button id=\"promptDeleteBtn\">R</button> \
+            ");
+            if (!GM_getValue(strangerIdent)) {
+                $("#promptDeleteBtn").hide();
+            }
+
+            $("#promptSaveBtn").click(() => {
+                $("#savePopupContainer").toggle();
+                $("input#name").focus();
+            });
+
+            $("#promptDeleteBtn").click(() => {
+                GM_deleteValue(strangerIdent);
+                $("#promptDeleteBtn").hide();
+                p.innerText = "Stranger identity: " + strangerIdent;
+            });
+
+            $("#name").keypress(e => {
+                if (e.which == 13) {
+                    $("#saveBtn").click();
+                }
+            });
+
+            $("#saveBtn").click(() => {
+                const name = $("#name").val();
+                if (name) {
+                    GM_setValue(strangerIdent, name);
+                    $("#promptDeleteBtn").show();
+                    p.innerText = "Stranger identity: " + name;
+                }
+            });
+        }
     }
 
     function printStrangerIdent(ident, thisIdents) {
@@ -52,15 +136,15 @@
             printOmegleLog("Could not get stranger identity because your IP address has changed. Should work next time.");
             return;
         }
-        printOmegleLog("Stranger identity: " + ident);
+        printOmegleLog("Stranger identity: " + ident, true);
     }
 
     function getOtherIdent(ident, idents) {
         if (idents.indexOf(ident) == -1) {
             return undefined;
         }
-        const otherIdent = idents[0] == myIdent ? idents[1] : idents[0];
-        return otherIdent;
+        strangerIdent = idents[0] == myIdent ? idents[1] : idents[0];
+        return GM_getValue(strangerIdent) || strangerIdent;
     }
 
     function handleIdents(idents) {
@@ -151,7 +235,13 @@
         XMLHttpRequest.prototype.open = function() {
             if (isBlacklisted(arguments)) return;
             handleReadyStateChange(this);
-            originalHandler.apply(this, arguments);            
+            originalHandler.apply(this, arguments);
+        }
+    }
+
+    function isUnwantedEvent(obj, args) {
+        if (obj == document && args[0] == "keydown") {
+            return true;
         }
     }
 
@@ -159,4 +249,11 @@
         window.unsafeWindow.termsLevel = 1;
         handleRequestOpen(handler);
     })(XMLHttpRequest.prototype.open);
+
+    (function(handler) {
+        EventTarget.prototype.addEventListener = function() {
+            if (isUnwantedEvent(this, arguments)) return;
+            handler.apply(this, arguments);
+        }
+    })(EventTarget.prototype.addEventListener);
 })();
